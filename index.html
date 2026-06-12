@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>wavezbg editor</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 15px;
+      min-height: 100vh;
+      color: #000000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow-x: hidden;
+    }
+    
+    #waveCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: -1;
+    }
+    
+    * {
+      border-radius: 0 !important;
+      box-sizing: border-box;
+    }
+    
+    .app-container {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 20px;
+      max-width: 1000px;
+      width: 100%;
+      box-shadow: 0px 4px 15px rgba(0,0,0,0.3);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      margin-bottom: 20px;
+    }
+
+    .grid-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .palette-cell {
+      cursor: pointer;
+      border: 1px solid #cccccc;
+      padding: 5px;
+      background: rgba(238, 238, 238, 0.8);
+      text-align: center;
+      width: 70px;
+    }
+
+    .palette-cell:hover {
+      border-color: #000000;
+      background: rgba(224, 224, 224, 0.9);
+    }
+
+    .palette-preview {
+      width: 60px;
+      height: 34px;
+      border: 1px solid #999999;
+      margin: 0 auto 5px auto;
+    }
+
+    .palette-info {
+      font-size: 14px;
+    }
+
+    dialog {
+      border: 2px solid #000000;
+      padding: 15px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+    }
+
+    dialog::backdrop {
+      background: rgba(0,0,0,0.5);
+    }
+
+    .editor-section {
+      margin-bottom: 10px;
+      background: #f9f9f9;
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: left;
+    }
+
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .color-row label {
+      width: 65px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    input[type="text"] {
+      padding: 5px;
+      font-family: monospace;
+      width: 90px;
+      border: 1px solid #ccc;
+    }
+
+    input[type="color"] {
+      padding: 0;
+      width: 40px;
+      height: 30px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+    }
+
+    .preview-gradient {
+      width: 100%;
+      height: 60px;
+      border: 1px solid #000000;
+      margin-bottom: 15px;
+    }
+
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .button-group button, #toggleUiBttn {
+      padding: 8px 15px;
+      cursor: pointer;
+      border: 1px solid #000;
+      background: rgba(238, 238, 238, 0.9);
+      font-size: 14px;
+    }
+
+    .button-group button:hover, #toggleUiBttn:hover {
+      background: rgba(221, 221, 221, 1);
+    }
+
+    .clear-btn {
+      font-size: 12px;
+      padding: 3px 8px;
+      cursor: pointer;
+      border: 1px solid #999;
+      background: #fff;
+      margin-left: auto;
+    }
+
+    .clear-btn:hover {
+      background: #ffebeb;
+      border-color: #cc0000;
+      color: #cc0000;
+    }
+
+    #warningBox {
+      background: #fff3cd;
+      border: 1px solid #ffeeba;
+      color: #856404;
+      padding: 10px;
+      margin-bottom: 15px;
+      font-size: 12px;
+      display: none;
+      text-align: left;
+    }
+
+    #warningBox ul {
+      margin: 5px 0 0 0;
+      padding-left: 20px;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    footer {
+      margin-top: auto;
+      font-size: 14px;
+      color: #000000;
+    }
+
+    footer a {
+      color: #000000;
+      text-decoration: underline;
+      font-weight: bold;
+    }
+
+    #toggleUiBttn {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="waveCanvas"></canvas>
+
+  <button id="toggleUiBttn">Hide UI</button>
+
+  <div class="app-container" id="appContainer">
+    <header>
+      <h1 style="margin-top: 0;">wavezbg editor</h1>
+      <p>click any colour to edit</p>
+      <div class="button-group">
+        <button id="exportBttn">Export wave.txt</button>
+        <button id="importBttn">Import wave.txt</button>
+        <button id="resetBttn">Reset</button>
+        <input type="file" id="fileInput" accept=".txt">
+      </div>
+    </header>
+
+    <div class="grid-container" id="grid"></div>
+
+    <footer>
+      <p>Changes are saved automatically</p>
+      <p><a href="https://github.com/koutsie/wavezbg" target="_blank">download wavezbg</a></p>
+    </footer>
+  </div>
+
+  <dialog id="editor">
+    <h2 style="margin-top: 0;">edit colour</h2>
+    
+    <div class="preview-gradient" id="previewGradient"></div>
+    <div id="colorCount" style="font-size: 12px; font-weight: bold; margin-bottom: 10px; text-align: center;"></div>
+    
+    <div id="warningBox"></div>
+
+    <div class="editor-section">
+      <div class="color-row">
+        <label>Colour 1</label>
+        <input type="color" id="color1">
+        <input type="text" id="color1Hex" placeholder="#CC0000">
+      </div>
+    </div>
+
+    <div class="editor-section">
+      <div class="color-row">
+        <label>Colour 2</label>
+        <input type="color" id="color2">
+        <input type="text" id="color2Hex" placeholder="Empty">
+        <button class="clear-btn" id="clearC2">Clear</button>
+      </div>
+    </div>
+
+    <div class="editor-section">
+      <div class="color-row">
+        <label>Colour 3</label>
+        <input type="color" id="color3">
+        <input type="text" id="color3Hex" placeholder="Empty">
+        <button class="clear-btn" id="clearC3">Clear</button>
+      </div>
+    </div>
+
+    <div class="button-group" style="margin-top: 20px;">
+      <button id="saveBttn" style="font-weight: bold;">Save</button>
+      <button id="cancelBttn">Cancel</button>
+    </div>
+  </dialog>
+
+  <script>
+    let currentC1 = "#000000";
+    let currentC2 = null;
+    let currentC3 = null;
+
+    const canvas = document.getElementById("waveCanvas");
+    const ctx = canvas.getContext("2d");
+    let t = 0;
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    function drawWave() {
+      t += 0.015;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const grad = ctx.createLinearGradient(0, canvas.height, 0, 0);
+      grad.addColorStop(0, currentC1);
+      if (currentC2 && currentC3) {
+        grad.addColorStop(0.5, currentC2);
+        grad.addColorStop(1, currentC3);
+      } else if (currentC2) {
+        grad.addColorStop(1, currentC2);
+      } else {
+        grad.addColorStop(1, currentC1);
+      }
+      
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      const midY = canvas.height / 2;
+      const extent = canvas.width + 100;
+      
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height);
+        
+        for (let x = 0; x <= extent; x += 40) {
+          const dx = x / canvas.width;
+          const offset = Math.sin(dx * Math.PI * 2 + t * (0.5 + i * 0.2) + i) * (50 + i * 25);
+          const y = midY + offset * Math.sin(t * 0.3 + i);
+          ctx.lineTo(x, y);
+        }
+        
+        ctx.lineTo(extent, canvas.height);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+        ctx.fill();
+        
+        ctx.beginPath();
+        for (let x = 0; x <= extent; x += 40) {
+          const dx = x / canvas.width;
+          const offset = Math.sin(dx * Math.PI * 2 + t * (0.5 + i * 0.2) + i) * (50 + i * 25);
+          const y = midY + offset * Math.sin(t * 0.3 + i);
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+        ctx.lineWidth = 1 + i * 0.5;
+        ctx.stroke();
+      }
+      
+      requestAnimationFrame(drawWave);
+    }
+    drawWave();
+
+    const defaultPalettes = [
+      { index: 1, colors: ["#CC0000"] },
+      { index: 2, colors: ["#1A1A1A"] },
+      { index: 3, colors: ["#2D5F0F", "#1A3300"] },
+      { index: 4, colors: ["#2D1A4D", "#1A0033"] },
+      { index: 5, colors: ["#0D1A3D", "#001A4D"] },
+      { index: 6, colors: ["#4D2600", "#331400"] },
+      { index: 7, colors: ["#0D3D4D", "#001A2D"] },
+      { index: 8, colors: ["#1A0D2D", "#2D0D1A"] },
+      { index: 9, colors: ["#4D0000", "#2D0000"] },
+      { index: 10, colors: ["#1A3D0D", "#0D2600"] },
+      { index: 11, colors: ["#2D1A4D", "#1A0D33"] },
+      { index: 12, colors: ["#262626"] },
+      { index: 13, colors: ["#FF1493", "#8B0A50"] },
+      { index: 14, colors: ["#00FF7F", "#008B4D"] },
+      { index: 15, colors: ["#FFB000", "#8B5700"] },
+      { index: 16, colors: ["#FF00FF", "#8B008B"] },
+      { index: 17, colors: ["#39FF14", "#1A7A00"] },
+      { index: 18, colors: ["#FF4500", "#8B2200"] },
+      { index: 19, colors: ["#00B3B3"] }, 
+      { index: 20, colors: ["#8B00FF", "#4D0080"] },
+      { index: 21, colors: ["#5EBD00"] }, 
+      { index: 22, colors: ["#FF0040", "#8B0020"] },
+      { index: 23, colors: ["#0099FF"] },
+      { index: 24, colors: ["#FF00AA", "#800055"] },
+      { index: 25, colors: ["#00FF40", "#008B20"] },
+      { index: 26, colors: ["#FF5500", "#8B2B00"] },
+      { index: 27, colors: ["#FF1188", "#800844"] },
+      { index: 28, colors: ["#1A0033", "#330066"] },
+      { index: 29, colors: ["#001A33", "#003366"] },
+      { index: 30, colors: ["#331A00", "#663300"] },
+      { index: 31, colors: ["#330011", "#660022"] },
+      { index: 32, colors: ["#D60270", "#9B4F96", "#0038A8"] },
+      { index: 33, colors: ["#3DA542", "#A6A6A6", "#000000"] }, 
+      { index: 34, colors: ["#5BCEFA", "#F5A9B8", "#FFFFFF"] }
+    ];
+
+    let palettes = JSON.parse(localStorage.getItem("pspPalettes"));
+    if (!palettes || palettes.length !== 34) {
+      palettes = JSON.parse(JSON.stringify(defaultPalettes));
+    }
+    
+    let currentEditIndex = null;
+    let savedPageBg = [];
+
+    const grid = document.getElementById("grid");
+    const editor = document.getElementById("editor");
+    const saveBttn = document.getElementById("saveBttn");
+    const cancelBttn = document.getElementById("cancelBttn");
+    const resetBttn = document.getElementById("resetBttn");
+    const color1Input = document.getElementById("color1");
+    const color2Input = document.getElementById("color2");
+    const color3Input = document.getElementById("color3");
+    const color1Hex = document.getElementById("color1Hex");
+    const color2Hex = document.getElementById("color2Hex");
+    const color3Hex = document.getElementById("color3Hex");
+    const clearC2 = document.getElementById("clearC2");
+    const clearC3 = document.getElementById("clearC3");
+    const previewGradient = document.getElementById("previewGradient");
+    const exportBttn = document.getElementById("exportBttn");
+    const importBttn = document.getElementById("importBttn");
+    const fileInput = document.getElementById("fileInput");
+    const colorCount = document.getElementById("colorCount");
+    const warningBox = document.getElementById("warningBox");
+    const toggleUiBttn = document.getElementById("toggleUiBttn");
+    const appContainer = document.getElementById("appContainer");
+
+    toggleUiBttn.addEventListener("click", () => {
+      if (appContainer.style.display === "none") {
+        appContainer.style.display = "flex";
+        toggleUiBttn.textContent = "Hide UI";
+      } else {
+        appContainer.style.display = "none";
+        toggleUiBttn.textContent = "Show UI";
+      }
+    });
+
+    function applyWaveBgToPage(h1, h2, h3) {
+      currentC1 = h1 ? normalizeHex(h1) : "#000000";
+      currentC2 = h2 ? normalizeHex(h2) : null;
+      currentC3 = h3 ? normalizeHex(h3) : null;
+    }
+
+    function normalizeHex(hex) {
+      return hex.startsWith("#") ? hex.toUpperCase() : "#" + hex.toUpperCase();
+    }
+
+    function getRgb(hex) {
+      if (!hex || hex.length < 7) return {r:0, g:0, b:0};
+      return {
+        r: parseInt(hex.slice(1, 3), 16),
+        g: parseInt(hex.slice(3, 5), 16),
+        b: parseInt(hex.slice(5, 7), 16)
+      };
+    }
+
+    function renderGrid() {
+      grid.innerHTML = "";
+      palettes.forEach(function(pal, idx) {
+        const cell = document.createElement("div");
+        cell.className = "palette-cell";
+        
+        const color1 = pal.colors[0] ? normalizeHex(pal.colors[0]) : "#000000";
+        let gradient;
+        
+        if (pal.colors.length === 1) {
+            gradient = color1;
+        } else if (pal.colors.length === 2) {
+            const color2 = normalizeHex(pal.colors[1]);
+            gradient = "linear-gradient(to top, " + color1 + " 0%, " + color2 + " 100%)";
+        } else {
+            const color2 = normalizeHex(pal.colors[1]);
+            const color3 = normalizeHex(pal.colors[2]);
+            gradient = "linear-gradient(to top, " + color1 + " 0%, " + color2 + " 50%, " + color3 + " 100%)";
+        }
+        
+        cell.innerHTML = 
+          "<div class=\"palette-preview\" style=\"background: " + gradient + ";\"></div>" +
+          "<div class=\"palette-info\"><strong>" + pal.index + "</strong></div>";
+        
+        cell.addEventListener("click", function() { openEditor(idx); });
+        grid.appendChild(cell);
+      });
+    }
+
+    function openEditor(idx) {
+      currentEditIndex = idx;
+      const pal = palettes[idx];
+      
+      savedPageBg = [...pal.colors];
+      
+      color1Hex.value = pal.colors[0] ? normalizeHex(pal.colors[0]) : "";
+      color1Input.value = pal.colors[0] ? normalizeHex(pal.colors[0]) : "#000000";
+      
+      color2Hex.value = pal.colors[1] ? normalizeHex(pal.colors[1]) : "";
+      color2Input.value = pal.colors[1] ? normalizeHex(pal.colors[1]) : "#000000";
+      
+      color3Hex.value = pal.colors[2] ? normalizeHex(pal.colors[2]) : "";
+      color3Input.value = pal.colors[2] ? normalizeHex(pal.colors[2]) : "#000000";
+      
+      updatePreview();
+      editor.showModal();
+    }
+
+    function updatePreview() {
+      const h1 = color1Hex.value.trim();
+      const h2 = color2Hex.value.trim();
+      const h3 = color3Hex.value.trim();
+      
+      let count = 0;
+      if (h1) count++;
+      if (h2) count++;
+      if (h3) count++;
+      colorCount.textContent = "Colours Active: " + count;
+      
+      const c1 = h1 ? normalizeHex(h1) : "#000000";
+      const c2 = h2 ? normalizeHex(h2) : c1;
+      
+      let gradient;
+      if (!h2 && !h3) {
+        gradient = c1;
+      } else if (h2 && !h3) {
+        gradient = "linear-gradient(to top, " + c1 + " 0%, " + c2 + " 100%)";
+      } else if (h2 && h3) {
+        const c3 = normalizeHex(h3);
+        gradient = "linear-gradient(to top, " + c1 + " 0%, " + c2 + " 50%, " + c3 + " 100%)";
+      } else if (!h2 && h3) {
+        const c3 = normalizeHex(h3);
+        gradient = "linear-gradient(to top, " + c1 + " 0%, " + c3 + " 100%)";
+      }
+      
+      previewGradient.style.background = gradient;
+      
+      applyWaveBgToPage(h1, h2, h3);
+      checkWarnings(h1, h2, h3, count);
+    }
+
+    function checkWarnings(h1, h2, h3, activeCount) {
+      let warnings = [];
+      
+      const checkBright = function(h, name) {
+        if (!h) return;
+        const rgb = getRgb(h);
+        const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
+        if (brightness > 175) {
+          warnings.push(name + " is too bright.");
+        }
+      };
+
+      checkBright(h1, "Colour 1");
+      checkBright(h2, "Colour 2");
+      checkBright(h3, "Colour 3");
+
+      if (h1 && h2 && h3 && activeCount === 3) {
+        const rgb2 = getRgb(h2);
+        if (rgb2.r > 240 && rgb2.g > 240 && rgb2.b > 240) {
+          warnings.push("Middle colour is too white. Try grey.");
+        }
+      }
+
+      if (warnings.length > 0) {
+        warningBox.innerHTML = "<strong>Warnings:</strong><ul><li>" + warnings.join("</li><li>") + "</li></ul>";
+        warningBox.style.display = "block";
+      } else {
+        warningBox.style.display = "none";
+      }
+    }
+
+    color1Input.addEventListener("input", function(e) { color1Hex.value = e.target.value.toUpperCase(); updatePreview(); });
+    color2Input.addEventListener("input", function(e) { color2Hex.value = e.target.value.toUpperCase(); updatePreview(); });
+    color3Input.addEventListener("input", function(e) { color3Hex.value = e.target.value.toUpperCase(); updatePreview(); });
+
+    color1Hex.addEventListener("input", function(e) { color1Input.value = normalizeHex(e.target.value) || "#000000"; updatePreview(); });
+    color2Hex.addEventListener("input", function(e) { color2Input.value = normalizeHex(e.target.value) || "#000000"; updatePreview(); });
+    color3Hex.addEventListener("input", function(e) { color3Input.value = normalizeHex(e.target.value) || "#000000"; updatePreview(); });
+
+    clearC2.addEventListener("click", function() {
+      color2Hex.value = "";
+      color2Input.value = "#000000";
+      updatePreview();
+    });
+
+    clearC3.addEventListener("click", function() {
+      color3Hex.value = "";
+      color3Input.value = "#000000";
+      updatePreview();
+    });
+
+    saveBttn.addEventListener("click", function() {
+      if (currentEditIndex !== null) {
+        const newColors = [];
+        if (color1Hex.value.trim()) newColors.push(normalizeHex(color1Hex.value.trim()));
+        if (color2Hex.value.trim()) newColors.push(normalizeHex(color2Hex.value.trim()));
+        if (color3Hex.value.trim()) newColors.push(normalizeHex(color3Hex.value.trim()));
+        
+        if (newColors.length === 0) newColors.push("#000000");
+        
+        palettes[currentEditIndex].colors = newColors;
+        savedPageBg = [...newColors];
+        
+        localStorage.setItem("pspPalettes", JSON.stringify(palettes));
+        renderGrid();
+        editor.close();
+      }
+    });
+
+    cancelBttn.addEventListener("click", function() {
+      applyWaveBgToPage(savedPageBg[0], savedPageBg[1], savedPageBg[2]);
+      editor.close();
+    });
+
+    resetBttn.addEventListener("click", function() {
+      if (confirm("Reset all colours to defaults?")) {
+        palettes = JSON.parse(JSON.stringify(defaultPalettes));
+        localStorage.setItem("pspPalettes", JSON.stringify(palettes));
+        applyWaveBgToPage(palettes[0].colors[0], palettes[0].colors[1], palettes[0].colors[2]);
+        renderGrid();
+      }
+    });
+
+    exportBttn.addEventListener("click", function() {
+      let content = "# wavezbg - 2026 Koutsie\n# https://kouts.the-sauna.icu/\n# Place this file in ms0:/seplugins/wave.txt\n# or if on a Go ef0:/seplugins/wave.txt\n\n# Format: [Month 1-34] = [Colour 1] [Colour 2] [Colour 3]\n\n";
+      
+      palettes.forEach(function(pal) {
+        content += pal.index + " = " + pal.colors.join(" ") + "\n";
+      });
+
+      const blob = new Blob([content], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "wave.txt";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    importBttn.addEventListener("click", function() {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const text = evt.target.result;
+        const lines = text.split("\n");
+        let newPalettes = JSON.parse(JSON.stringify(defaultPalettes));
+
+        lines.forEach(function(line) {
+          const match = line.match(/^(\d+)\s*=/);
+          if (match) {
+            const idx = parseInt(match[1], 10);
+            if (idx >= 1 && idx <= 34) {
+              const hexMatch = line.match(/#[0-9A-Fa-f]{6}/g);
+              if (hexMatch && hexMatch.length > 0) {
+                const validColors = [];
+                for(let j=0; j<hexMatch.length; j++) {
+                    validColors.push(hexMatch[j].toUpperCase());
+                    if (validColors.length === 3) break;
+                }
+                newPalettes[idx - 1].colors = validColors;
+              }
+            }
+          }
+        });
+
+        palettes = newPalettes;
+        localStorage.setItem("pspPalettes", JSON.stringify(palettes));
+        applyWaveBgToPage(palettes[0].colors[0], palettes[0].colors[1], palettes[0].colors[2]);
+        renderGrid();
+        fileInput.value = ""; 
+      };
+      reader.readAsText(file);
+    });
+
+    applyWaveBgToPage(palettes[0].colors[0], palettes[0].colors[1], palettes[0].colors[2]);
+    renderGrid();
+  </script>
+</body>
+</html>
