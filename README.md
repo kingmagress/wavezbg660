@@ -5,6 +5,8 @@
 
 Custom XMB Waves for the PSP
 
+[Kommunity Post](https://www.komstation.com/kommunity/space/psp/post/psp-xmb-custom-waves)  |  [Komstation Release Page](https://www.komstation.com/downloads/wavezbg-custom-xmb-colors/)
+
 # Installation
 
 Download the latest release from 
@@ -46,3 +48,6 @@ YOU for using the plugin!
 
 Join the [PSP Homebrew Community](https://urlr.me/!psp) Discord guild!
 
+> <sub>quadruple -- Yesterday at 23:06</sub><br>
+> <sub>nic and food</sub><br>
+> <sub>thats all i can do</sub>
