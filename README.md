@@ -37,7 +37,7 @@ Shoutouts to the PSP Homebrew Community for being awesome.
 
 Bagieta for inspiring me to do this with their PAF reversal efforts.
 
-@mrmario211 ([YT](https://www.youtube.com/c/MrMario2011/videos)[)]() for
+[@MrMario2011](https://github.com/MrMario2011) ([YT](https://www.youtube.com/c/MrMario2011/videos)[)]() for
 helping with GO support and testing!
 
 YOU for using the plugin!
