@@ -4,10 +4,25 @@
 Custom XMB Waves for the PSP
 
 # Installation
+Download the latest release from [here](https://github.com/koutsie/wavezbg/releases/latest).
 
+Install using ARK's Custom Launcher as VSH (XMB) plugin.
+
+Restart PSP.
+
+Kachow!
 
 # Usage
+The plugin creates a wave.txt in your SEPLUGINS folder, edit that with whatever HTML colour codes you want.
+
+Or use the [web editor](https://koutsie.github.io/wavezbg/)
+
+If you fuck up, a wavezbg_ERROR.txt will be generated.
 
 
-### Credits
+## Credits
 Shoutouts to the PSP Homebrew Community for being awesome, Bagieta for inspiring me to do this with their PAF reversal efforts and YOU for using the plugin!
+
+
+## Support, comments etc?
+Join the [PSP Homebrew Community](https://urlr.me/!psp) Discord guild!
