@@ -3,6 +3,7 @@
 # wavezbg
 Custom XMB Waves for the PSP
 
+
 # Installation
 Download the latest release from [here](https://github.com/koutsie/wavezbg/releases/latest).
 
@@ -21,6 +22,9 @@ If you fuck up, a wavezbg_ERROR.txt will be generated.
 
 ## Known features
 It does NOT work with CXMB.
+
+Also, no warranties, guarantees etc given.
+You're on your own.
 
 ## Credits
 Shoutouts to the PSP Homebrew Community for being awesome, Bagieta for inspiring me to do this with their PAF reversal efforts and YOU for using the plugin!
