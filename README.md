@@ -31,6 +31,10 @@ If you fuck up, a wavezbg_ERROR.txt will be generated.
 
 It does NOT work with CXMB.
 
+No firmware other than 6.61 is supported.
+
+I only test and support ARK, if you're on LE/PRO(-C) etc you're outta luck.
+
 Also, no warranties, guarantees etc given. You're on your own.
 
 ## Credits
