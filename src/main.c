@@ -235,8 +235,6 @@ int patch_wave_strings() {
     // only for 6.61
     // patches taken to make this better tbh
     int patched = 0;
-    char *addr = (char *)0x08800000;
-    char *end_addr = (char *)0x0A200000;
     
     char replace1[36];
     memset(replace1, 0, sizeof(replace1));
@@ -247,27 +245,48 @@ int patch_wave_strings() {
     memset(replace2, 0, sizeof(replace2));
     strcpy(replace2, base_path);
     strcat(replace2, "wavez_cache/w2.bmp");
-    
-    while (addr < end_addr) {
-        if (addr[0] == 'f' && addr[1] == 'l' && addr[2] == 'a' && addr[3] == 's' && addr[4] == 'h') {
-            if (strncmp(addr, "flash0:/vsh/resource/01-12.bmp", 30) == 0) {
-                memcpy(addr, replace1, 30);
-                sceKernelDcacheWritebackInvalidateRange(addr, 30);
-                patched = 1;
-            }
-            else if (strncmp(addr, "flash0:/vsh/resource/01-12_03g.bmp", 34) == 0) {
-                memcpy(addr, replace1, 34);
-                sceKernelDcacheWritebackInvalidateRange(addr, 34);
-                patched = 1;
-            }
-            else if (strncmp(addr, "flash0:/vsh/resource/13-27.bmp", 30) == 0) {
-                memcpy(addr, replace2, 30);
-                sceKernelDcacheWritebackInvalidateRange(addr, 30);
-                patched = 1;
+
+    SceUID ids[100];
+    int count = 0;
+    if (sceKernelGetModuleIdList(ids, sizeof(ids), &count) >= 0) {
+        for (int i = 0; i < count; i++) {
+            SceKernelModuleInfo info;
+            memset(&info, 0, sizeof(info));
+            info.size = sizeof(info);
+            
+            if (sceKernelQueryModuleInfo(ids[i], &info) >= 0) {
+                if (strstr(info.name, "system_plugin_bg") != NULL ||
+                    strstr(info.name, "sysconf_plugin") != NULL ||
+                    strstr(info.name, "vsh") != NULL) {
+                    
+                    char *addr = (char *)info.text_addr;
+                    char *end_addr = addr + info.text_size + info.data_size + info.bss_size;
+                    
+                    while (addr < end_addr - 34) {
+                        if (addr[0] == 'f' && addr[1] == 'l' && addr[2] == 'a' && addr[3] == 's' && addr[4] == 'h') {
+                            if (strncmp(addr, "flash0:/vsh/resource/01-12.bmp", 30) == 0) {
+                                memcpy(addr, replace1, 30);
+                                sceKernelDcacheWritebackInvalidateRange(addr, 30);
+                                patched = 1;
+                            }
+                            else if (strncmp(addr, "flash0:/vsh/resource/01-12_03g.bmp", 34) == 0) {
+                                memcpy(addr, replace1, 34);
+                                sceKernelDcacheWritebackInvalidateRange(addr, 34);
+                                patched = 1;
+                            }
+                            else if (strncmp(addr, "flash0:/vsh/resource/13-27.bmp", 30) == 0) {
+                                memcpy(addr, replace2, 30);
+                                sceKernelDcacheWritebackInvalidateRange(addr, 30);
+                                patched = 1;
+                            }
+                        }
+                        addr++;
+                    }
+                }
             }
         }
-        addr++;
     }
+    
     return patched;
 }
 
@@ -290,6 +309,9 @@ int main_thread(SceSize args, void *argp) {
 }
 
 int module_start(SceSize args, void *argp) {
+    if (sceKernelDevkitVersion() != 0x06060110) {
+        return 1;
+    }
     SceUID thid = sceKernelCreateThread("wavezbg_thread", main_thread, 0x18, 0x10000, 0, NULL);
     if (thid >= 0) {
         sceKernelStartThread(thid, args, argp);
