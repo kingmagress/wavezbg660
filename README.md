@@ -52,6 +52,8 @@ YOU for using the plugin!
 
 Join the [PSP Homebrew Community](https://urlr.me/!psp) Discord guild!
 
+There are also the [Github Discussions](https://github.com/koutsie/wavezbg/discussions) ?
+
 > <sub>quadruple -- Yesterday at 23:06</sub><br>
 > <sub>nic and food</sub><br>
 > <sub>thats all i can do</sub>
