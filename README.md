@@ -19,6 +19,8 @@ Or use the [web editor](https://koutsie.github.io/wavezbg/)
 
 If you fuck up, a wavezbg_ERROR.txt will be generated.
 
+## Known features
+It does NOT work with CXMB.
 
 ## Credits
 Shoutouts to the PSP Homebrew Community for being awesome, Bagieta for inspiring me to do this with their PAF reversal efforts and YOU for using the plugin!
