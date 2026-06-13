@@ -47,13 +47,17 @@ Bagieta for inspiring me to do this with their PAF reversal efforts.
 helping with GO support and testing!
 
 TotalKommando ([YT](https://www.youtube.com/@TotalKommando)) for helping with 1K support and testing!
-YOU for using the plugin!
+
+And of course *YOU* for using the plugin!
 
 ## Support, comments etc?
 
 Join the [PSP Homebrew Community](https://urlr.me/!psp) Discord guild!
 
 There are also the [Github Discussions](https://github.com/koutsie/wavezbg/discussions) ?
+
+
+<sub>Wanna donate for some reason?</sub><br><sub>https://koutsie.itch.io/</sub>
 
 > <sub>quadruple -- Yesterday at 23:06</sub><br>
 > <sub>nic and food</sub><br>
