@@ -1,23 +1,25 @@
-
 ![collage](https://github.com/user-attachments/assets/e3e01cb8-1b67-43dc-be75-d7058b4aaca5)
 
 # wavezbg
 
 Custom XMB Waves for the PSP
 
-[Kommunity Post](https://www.komstation.com/kommunity/space/psp/post/psp-xmb-custom-waves)  |  [Komstation Release Page](https://www.komstation.com/downloads/wavezbg-custom-xmb-colors/)
+[Kommunity Post](https://www.komstation.com/kommunity/space/psp/post/psp-xmb-custom-waves) | [Komstation Release Page](https://www.komstation.com/downloads/wavezbg-custom-xmb-colors/)
 
 # Installation
 
-Download the latest release from 
+Download the latest release from
 [here](https://github.com/kingmagress/wavezbg/releases/latest).
 
-Note: Delete the wavez_cache/ folder on root of your memory stick everytime you have a new wave.txt
+Note1: Delete the wavez_cache/ folder on root of your memory stick everytime you have a new wave.txt
+Note2: Added the wave_insane.txt which has presets of really vibrant colors as sample reference.
 
-[6.60 PRO-C PSP 1000]
+[Tested on 6.60 PRO-C PSP 1000]
+
 - Enable "Use Slim Colors on PSP-1000" via recovery menu (default enabled)
 - Make sure flash0:/vsh/resource/01-12.bmp and flash0:/vsh/resource/13-27.bmp exists. Otherwise, Install slim colours here https://github.com/krazynez/slim_colors/releases/tag/v2.1
-- Install this plugin as a VSH (XMB) plugin.
+- Install this plugin as a VSH (XMB) plugin.E.g. add this ms0:/seplugins/wavezbg660/wavezbg660.prx 1 inside inside VSH.txt
+- wave.txt should be at ms0:/seplugins/wave.txt
 
 Restart PSP.
 
@@ -40,7 +42,7 @@ It does NOT work with CXMB.
 ~~I only test and support ARK, if you're on LE/PRO(-C) etc you're outta luck.~~
 
 Tested working on 6.60 PRO-C, on PSP 1000.
-Some of the month colour slot # may not correspond to the PSP color selection slot #. 
+Some of the month colour slot # may not correspond to the PSP color selection slot #.
 Your best bet is to have a wide variety of presets in wave.txt or make all of the slots in wave.txt the same color scheme.
 
 Also, no warranties, guarantees etc given. You're on your own.
@@ -56,7 +58,7 @@ helping with GO support and testing!
 
 TotalKommando ([YT](https://www.youtube.com/@TotalKommando)) for helping with 1K support and testing!
 
-And of course *YOU* for using the plugin!
+And of course _YOU_ for using the plugin!
 
 Koutsie the author
 
@@ -65,7 +67,6 @@ Koutsie the author
 Join the [PSP Homebrew Community](https://urlr.me/!psp) Discord guild!
 
 There are also the [Github Discussions](https://github.com/koutsie/wavezbg/discussions) ?
-
 
 <sub>Wanna donate for some reason?</sub><br><sub>https://koutsie.itch.io/</sub>
 
