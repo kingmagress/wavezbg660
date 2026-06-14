@@ -309,7 +309,9 @@ int main_thread(SceSize args, void *argp) {
 }
 
 int module_start(SceSize args, void *argp) {
-    if (sceKernelDevkitVersion() != 0x06060110) {
+    // 0x06060110 = 6.61 (ARK), 0x06060010 = 6.60 (PRO-C)
+    unsigned int ver = sceKernelDevkitVersion();
+    if (ver != 0x06060110 && ver != 0x06060010) {
         return 1;
     }
     SceUID thid = sceKernelCreateThread("wavezbg_thread", main_thread, 0x18, 0x10000, 0, NULL);
