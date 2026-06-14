@@ -35,6 +35,20 @@ inline int hex2int(char c) {
     return 0;
 }
 
+static inline int is_hex(char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+// True only if p[1..6] are all valid hex digits. The loop returns on the first
+// non-hex char (the NUL terminator is not hex), so it never reads past the end
+// of a NUL-terminated buffer even when '#' is the last character.
+static int valid_hex6(const char *p) {
+    for (int i = 1; i <= 6; i++) {
+        if (!is_hex(p[i])) return 0;
+    }
+    return 1;
+}
+
 unsigned int parse_hex_colour(const char *buf) {
     int r = (hex2int(buf[1]) << 4) | hex2int(buf[2]);
     int g = (hex2int(buf[3]) << 4) | hex2int(buf[4]);
@@ -58,18 +72,18 @@ int parse_config_buffer(const char* buf) {
         }
         while (*p == ' ' || *p == '=') p++;
         
-        if (index >= 1 && index <= 35 && *p == '#') {
+        if (index >= 1 && index <= 35 && *p == '#' && valid_hex6(p)) {
             month_colours[index - 1].c1 = parse_hex_colour(p);
             month_colours[index - 1].num_colours = 1;
             valid++;
             p += 7;
             while (*p == ' ') p++;
-            if (*p == '#') {
+            if (*p == '#' && valid_hex6(p)) {
                 month_colours[index - 1].c2 = parse_hex_colour(p);
                 month_colours[index - 1].num_colours = 2;
                 p += 7;
                 while (*p == ' ') p++;
-                if (*p == '#') {
+                if (*p == '#' && valid_hex6(p)) {
                     month_colours[index - 1].c3 = parse_hex_colour(p);
                     month_colours[index - 1].num_colours = 3;
                     p += 7;
@@ -115,7 +129,10 @@ void read_config() {
             base_path[0] = 'm'; base_path[1] = 's';
         }
     } else {
-        char buf[2048];
+        // Larger than the shipped wave.txt so user files with extra comments
+        // parse fully instead of being silently truncated. Transient: this
+        // lives only on the worker thread's stack, freed when the thread exits.
+        char buf[4096];
         int bytes = sceIoRead(fd, buf, sizeof(buf) - 1);
         sceIoClose(fd);
         if (bytes > 0) {
@@ -145,23 +162,28 @@ void write_bmp(const char *filename, int start_month, int count) {
     SceUID fd = sceIoOpen(bmp_path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
     if (fd < 0) return;
 
+    // The BMP header is identical for every strip (60x34, 24-bit), and the loop
+    // below overwrites the entire pixel region each iteration, so build the
+    // buffer and header once instead of re-zeroing and rebuilding 34 times.
+    // The memset also clears the header's reserved fields and the trailing pad
+    // bytes, which the pixel loop never touches.
+    unsigned char bmp_data[6176];
+    memset(bmp_data, 0, sizeof(bmp_data));
+
+    bmp_data[0] = 'B'; bmp_data[1] = 'M';
+    *((unsigned int*)&bmp_data[2]) = 6176;
+    *((unsigned int*)&bmp_data[10]) = 54;
+    *((unsigned int*)&bmp_data[14]) = 40;
+    *((unsigned int*)&bmp_data[18]) = 60;
+    *((unsigned int*)&bmp_data[22]) = 34;
+    *((unsigned short*)&bmp_data[26]) = 1;
+    *((unsigned short*)&bmp_data[28]) = 24;
+    *((unsigned int*)&bmp_data[34]) = 6120;
+
     for (int i = 0; i < count; i++) {
         int m = start_month + i;
         if (m >= 35) m = 34;
 
-        unsigned char bmp_data[6176];
-        memset(bmp_data, 0, sizeof(bmp_data));
-        
-        bmp_data[0] = 'B'; bmp_data[1] = 'M';
-        *((unsigned int*)&bmp_data[2]) = 6176;
-        *((unsigned int*)&bmp_data[10]) = 54;
-        *((unsigned int*)&bmp_data[14]) = 40;
-        *((unsigned int*)&bmp_data[18]) = 60;
-        *((unsigned int*)&bmp_data[22]) = 34;
-        *((unsigned short*)&bmp_data[26]) = 1;
-        *((unsigned short*)&bmp_data[28]) = 24;
-        *((unsigned int*)&bmp_data[34]) = 6120;
-        
         int r1 = month_colours[m].c1 & 0xFF;
         int g1 = (month_colours[m].c1 >> 8) & 0xFF;
         int b1 = (month_colours[m].c1 >> 16) & 0xFF;
@@ -249,19 +271,26 @@ int patch_wave_strings() {
     SceUID ids[100];
     int count = 0;
     if (sceKernelGetModuleIdList(ids, sizeof(ids), &count) >= 0) {
+        // count is the total module count, which may exceed what fit in ids[].
+        int max_ids = (int)(sizeof(ids) / sizeof(ids[0]));
+        if (count > max_ids) count = max_ids;
+
         for (int i = 0; i < count; i++) {
             SceKernelModuleInfo info;
             memset(&info, 0, sizeof(info));
             info.size = sizeof(info);
-            
+
             if (sceKernelQueryModuleInfo(ids[i], &info) >= 0) {
                 if (strstr(info.name, "system_plugin_bg") != NULL ||
                     strstr(info.name, "sysconf_plugin") != NULL ||
                     strstr(info.name, "vsh") != NULL) {
-                    
+
+                    // Skip modules with no valid text segment so we never scan from a bogus base.
+                    if (info.text_addr == 0) continue;
+
                     char *addr = (char *)info.text_addr;
                     char *end_addr = addr + info.text_size + info.data_size + info.bss_size;
-                    
+
                     while (addr < end_addr - 34) {
                         if (addr[0] == 'f' && addr[1] == 'l' && addr[2] == 'a' && addr[3] == 's' && addr[4] == 'h') {
                             if (strncmp(addr, "flash0:/vsh/resource/01-12.bmp", 30) == 0) {
@@ -296,15 +325,21 @@ int main_thread(SceSize args, void *argp) {
 
     read_config();
     generate_wave_bmp();
-    
-    while(1) {
+
+    // The target VSH modules aren't loaded yet when module_start runs, so poll
+    // until their resource strings are in memory and we can patch them. Bounded
+    // at ~60s (600 * 100ms) so that if the patch never lands (unexpected module
+    // names, CXMB, etc.) we give up and free this thread instead of spinning
+    // forever. The success case breaks out within the first second or two, so
+    // the timeout never affects working setups.
+    for (int attempts = 0; attempts < 600; attempts++) {
         if (patch_wave_strings()) {
-            sceKernelExitDeleteThread(0);
-            return 0;
+            break;
         }
         sceKernelDelayThread(100000);
     }
-    
+
+    sceKernelExitDeleteThread(0);
     return 0;
 }
 
@@ -314,7 +349,10 @@ int module_start(SceSize args, void *argp) {
     if (ver != 0x06060110 && ver != 0x06060010) {
         return 1;
     }
-    SceUID thid = sceKernelCreateThread("wavezbg_thread", main_thread, 0x18, 0x10000, 0, NULL);
+    // 0x8000 (32KB) stack: peak use is ~6.5KB (the 6176-byte BMP buffer in
+    // write_bmp plus call frames), leaving a generous safety margin. The thread
+    // deletes itself once patching succeeds, so this is reclaimed at boot.
+    SceUID thid = sceKernelCreateThread("wavezbg_thread", main_thread, 0x18, 0x8000, 0, NULL);
     if (thid >= 0) {
         sceKernelStartThread(thid, args, argp);
     }
