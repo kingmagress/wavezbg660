@@ -28,7 +28,7 @@ typedef struct {
 MonthColour month_colours[35];
 char base_path[6] = "ms0:/";
 
-inline int hex2int(char c) {
+static inline int hex2int(char c) {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
     if (c >= 'A' && c <= 'F') return c - 'A' + 10;
@@ -153,6 +153,24 @@ void read_config() {
     }
 }
 
+// Little-endian field writers for the BMP header. The header fields land at
+// byte offsets that are not 4-byte aligned (the 2-byte "BM" magic shifts
+// everything by 2), so writing them with `*(unsigned int *)&buf[off] = x` is an
+// unaligned store - illegal on the PSP's MIPS core (Address Error exception)
+// and undefined behaviour in C. Byte-by-byte writes are both safe and
+// endian-explicit (BMP is little-endian).
+static inline void put_u32(unsigned char *p, unsigned int v) {
+    p[0] = (unsigned char)(v);
+    p[1] = (unsigned char)(v >> 8);
+    p[2] = (unsigned char)(v >> 16);
+    p[3] = (unsigned char)(v >> 24);
+}
+
+static inline void put_u16(unsigned char *p, unsigned short v) {
+    p[0] = (unsigned char)(v);
+    p[1] = (unsigned char)(v >> 8);
+}
+
 void write_bmp(const char *filename, int start_month, int count) {
     char bmp_path[64];
     strcpy(bmp_path, base_path);
@@ -171,14 +189,14 @@ void write_bmp(const char *filename, int start_month, int count) {
     memset(bmp_data, 0, sizeof(bmp_data));
 
     bmp_data[0] = 'B'; bmp_data[1] = 'M';
-    *((unsigned int*)&bmp_data[2]) = 6176;
-    *((unsigned int*)&bmp_data[10]) = 54;
-    *((unsigned int*)&bmp_data[14]) = 40;
-    *((unsigned int*)&bmp_data[18]) = 60;
-    *((unsigned int*)&bmp_data[22]) = 34;
-    *((unsigned short*)&bmp_data[26]) = 1;
-    *((unsigned short*)&bmp_data[28]) = 24;
-    *((unsigned int*)&bmp_data[34]) = 6120;
+    put_u32(&bmp_data[2], 6176);   // file size
+    put_u32(&bmp_data[10], 54);    // pixel data offset
+    put_u32(&bmp_data[14], 40);    // DIB header size
+    put_u32(&bmp_data[18], 60);    // width
+    put_u32(&bmp_data[22], 34);    // height
+    put_u16(&bmp_data[26], 1);     // colour planes
+    put_u16(&bmp_data[28], 24);    // bits per pixel
+    put_u32(&bmp_data[34], 6120);  // image data size
 
     for (int i = 0; i < count; i++) {
         int m = start_month + i;
@@ -253,16 +271,49 @@ void generate_wave_bmp() {
     write_bmp("w2.bmp", 12, 22);
 }
 
-int patch_wave_strings() {
-    // only for 6.61
-    // patches taken to make this better tbh
+// Scan one mapped memory range [addr, end_addr) for the stock flash0 wave
+// resource paths and rewrite them in-place to point at our cache. Returns 1 if
+// anything was patched. Callers MUST only ever pass a range that belongs to a
+// single loaded segment - that is what keeps the scan from wandering into the
+// unmapped gaps between segments (the cause of the random crashes).
+static int patch_range(char *addr, char *end_addr, const char *replace1, const char *replace2) {
     int patched = 0;
-    
+    if (addr == NULL || end_addr <= addr) return 0;
+
+    // Need at least 34 readable bytes for the longest path compare below.
+    while (addr + 34 <= end_addr) {
+        // Cheap first-byte gate before strncmp. A path we already rewrote no
+        // longer starts with "flash", so this stays idempotent across passes.
+        if (addr[0] == 'f' && addr[1] == 'l' && addr[2] == 'a' && addr[3] == 's' && addr[4] == 'h') {
+            if (strncmp(addr, "flash0:/vsh/resource/01-12.bmp", 30) == 0) {
+                memcpy(addr, replace1, 30);
+                sceKernelDcacheWritebackInvalidateRange(addr, 30);
+                patched = 1;
+            }
+            else if (strncmp(addr, "flash0:/vsh/resource/01-12_03g.bmp", 34) == 0) {
+                memcpy(addr, replace1, 34);
+                sceKernelDcacheWritebackInvalidateRange(addr, 34);
+                patched = 1;
+            }
+            else if (strncmp(addr, "flash0:/vsh/resource/13-27.bmp", 30) == 0) {
+                memcpy(addr, replace2, 30);
+                sceKernelDcacheWritebackInvalidateRange(addr, 30);
+                patched = 1;
+            }
+        }
+        addr++;
+    }
+    return patched;
+}
+
+int patch_wave_strings() {
+    int patched = 0;
+
     char replace1[36];
     memset(replace1, 0, sizeof(replace1));
     strcpy(replace1, base_path);
     strcat(replace1, "wavez_cache/w1.bmp");
-    
+
     char replace2[36];
     memset(replace2, 0, sizeof(replace2));
     strcpy(replace2, base_path);
@@ -280,42 +331,49 @@ int patch_wave_strings() {
             memset(&info, 0, sizeof(info));
             info.size = sizeof(info);
 
-            if (sceKernelQueryModuleInfo(ids[i], &info) >= 0) {
-                if (strstr(info.name, "system_plugin_bg") != NULL ||
-                    strstr(info.name, "sysconf_plugin") != NULL ||
-                    strstr(info.name, "vsh") != NULL) {
+            if (sceKernelQueryModuleInfo(ids[i], &info) < 0) continue;
 
-                    // Skip modules with no valid text segment so we never scan from a bogus base.
-                    if (info.text_addr == 0) continue;
+            // info.name is a fixed 28-byte field; force a terminator before
+            // strstr so a maxed-out name can't run the search past the struct.
+            info.name[sizeof(info.name) - 1] = '\0';
 
-                    char *addr = (char *)info.text_addr;
-                    char *end_addr = addr + info.text_size + info.data_size + info.bss_size;
+            if (strstr(info.name, "system_plugin_bg") == NULL &&
+                strstr(info.name, "sysconf_plugin") == NULL &&
+                strstr(info.name, "vsh") == NULL) {
+                continue;
+            }
 
-                    while (addr < end_addr - 34) {
-                        if (addr[0] == 'f' && addr[1] == 'l' && addr[2] == 'a' && addr[3] == 's' && addr[4] == 'h') {
-                            if (strncmp(addr, "flash0:/vsh/resource/01-12.bmp", 30) == 0) {
-                                memcpy(addr, replace1, 30);
-                                sceKernelDcacheWritebackInvalidateRange(addr, 30);
-                                patched = 1;
-                            }
-                            else if (strncmp(addr, "flash0:/vsh/resource/01-12_03g.bmp", 34) == 0) {
-                                memcpy(addr, replace1, 34);
-                                sceKernelDcacheWritebackInvalidateRange(addr, 34);
-                                patched = 1;
-                            }
-                            else if (strncmp(addr, "flash0:/vsh/resource/13-27.bmp", 30) == 0) {
-                                memcpy(addr, replace2, 30);
-                                sceKernelDcacheWritebackInvalidateRange(addr, 30);
-                                patched = 1;
-                            }
-                        }
-                        addr++;
+            // Scan each loaded segment on its own. The old code scanned
+            // [text_addr, text_addr + text_size + data_size + bss_size) as one
+            // block, but those segments are page-aligned and need not be
+            // adjacent - the gaps between them are UNMAPPED, so reading across
+            // one raises a TLB-miss exception and crashes the PSP. Whether a
+            // module has such a gap depends on its layout, which is why the
+            // crashes were random. Per-segment scanning only ever touches
+            // memory the loader actually mapped.
+            int nseg = info.nsegment;
+            if (nseg > 4) nseg = 4;
+
+            if (nseg > 0) {
+                for (int s = 0; s < nseg; s++) {
+                    char *start = (char *)(unsigned int)info.segmentaddr[s];
+                    unsigned int seg_size = (unsigned int)info.segmentsize[s];
+                    if (patch_range(start, start + seg_size, replace1, replace2)) {
+                        patched = 1;
                     }
+                }
+            } else if (info.text_addr != 0) {
+                // Fallback if the segment table is empty: scan only the text
+                // segment (the read-only rodata path strings we target live
+                // there). Still a single mapped segment, so still gap-safe.
+                char *start = (char *)info.text_addr;
+                if (patch_range(start, start + info.text_size, replace1, replace2)) {
+                    patched = 1;
                 }
             }
         }
     }
-    
+
     return patched;
 }
 

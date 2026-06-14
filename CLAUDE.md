@@ -59,7 +59,9 @@ The 35-element `month_colours[]` array is 1-indexed in the config but 0-indexed 
 - **No heap allocations anywhere** — every buffer is stack or static, so there are no memory leaks by construction. Keep it that way.
 - Every `sceIoOpen` has a matching `sceIoClose` on all paths.
 - The config parser must stay bounds-safe: `valid_hex6` short-circuits on the first non-hex char (the NUL terminator is not hex), so it never reads past a truncated buffer. Don't reintroduce unchecked `parse_hex_colour` + `p += 7`.
-- The module-id list is clamped to the `ids[]` capacity; the scanner skips modules with `text_addr == 0`.
+- The module-id list is clamped to the `ids[]` capacity. The string scanner walks each loaded segment **separately** via the module's segment table (`nsegment` / `segmentaddr[]` / `segmentsize[]`), with a text-segment fallback when that table is empty. **Do not** revert to scanning `[text_addr, text_addr + text_size + data_size + bss_size)` as one block — a module's segments are page-aligned and not necessarily adjacent, so that range crosses unmapped gaps and a stray read there is a TLB-miss exception (the random-crash bug fixed in this fork).
+- BMP header fields are written byte-by-byte (`put_u32` / `put_u16`), not via `*(unsigned int *)&buf[off]`. The fields sit at offsets ≡ 2 (mod 4), so pointer-cast stores are unaligned word accesses — illegal on the Allegrex MIPS core and UB in C. Keep the byte writes.
+- `info.name` is force-terminated before `strstr` (it is a fixed 28-byte field with no guaranteed NUL).
 - The worker thread always reaches `sceKernelExitDeleteThread`, so it never lingers even if patching never succeeds.
 
 ### Web editor ([index.html](index.html))
