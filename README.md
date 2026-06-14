@@ -10,9 +10,14 @@ Custom XMB Waves for the PSP
 # Installation
 
 Download the latest release from 
-[here](https://github.com/koutsie/wavezbg/releases/latest).
+[here](https://github.com/kingmagress/wavezbg/releases/latest).
 
-Install using ARK's Custom Launcher as VSH (XMB) plugin.
+Note: Delete the wavez_cache/ folder on root of your memory stick everytime you have a new wave.txt
+
+[6.60 PRO-C PSP 1000]
+- Enable "Use Slim Colors on PSP-1000" via recovery menu (default enabled)
+- Make sure flash0:/vsh/resource/01-12.bmp and flash0:/vsh/resource/13-27.bmp exists. Otherwise, Install slim colours here https://github.com/krazynez/slim_colors/releases/tag/v2.1
+- Install this plugin as a VSH (XMB) plugin.
 
 Restart PSP.
 
@@ -31,9 +36,12 @@ If you fuck up, a wavezbg_ERROR.txt will be generated.
 
 It does NOT work with CXMB.
 
-No firmware other than 6.61 is supported.
+~~No firmware other than 6.61 is supported.~~
+~~I only test and support ARK, if you're on LE/PRO(-C) etc you're outta luck.~~
 
-I only test and support ARK, if you're on LE/PRO(-C) etc you're outta luck.
+Tested working on 6.60 PRO-C, on PSP 1000.
+Some of the month colour slot # may not correspond to the PSP color selection slot #. 
+Your best bet is to have a wide variety of presets in wave.txt or make all of the slots in wave.txt the same color scheme.
 
 Also, no warranties, guarantees etc given. You're on your own.
 
@@ -49,6 +57,8 @@ helping with GO support and testing!
 TotalKommando ([YT](https://www.youtube.com/@TotalKommando)) for helping with 1K support and testing!
 
 And of course *YOU* for using the plugin!
+
+Koutsie the author
 
 ## Support, comments etc?
 
