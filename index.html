@@ -210,6 +210,84 @@
       left: 20px;
       z-index: 1000;
     }
+
+    /* Screenshot modal */
+    #screenshotModal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.93);
+      z-index: 9999;
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    .ss-modal-inner {
+      max-width: 1500px;
+      margin: 0 auto;
+    }
+
+    .ss-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .ss-modal-title {
+      color: #ffffff;
+      margin: 0;
+      font-size: 20px;
+    }
+
+    #closeScreenshotModal {
+      padding: 8px 18px;
+      cursor: pointer;
+      border: 1px solid #ffffff;
+      background: transparent;
+      color: #ffffff;
+      font-size: 14px;
+    }
+
+    #closeScreenshotModal:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .ss-bundle-wrap {
+      margin-bottom: 36px;
+      text-align: center;
+    }
+
+    .ss-bundle-label {
+      color: #aaaaaa;
+      font-size: 13px;
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+    }
+
+    .ss-bundle-img {
+      max-width: 100%;
+      display: block;
+      margin: 0 auto;
+      border: 1px solid #333;
+    }
+
+    .ss-download-btn {
+      margin-top: 10px;
+      padding: 7px 20px;
+      cursor: pointer;
+      border: 1px solid #888;
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+      font-size: 13px;
+    }
+
+    .ss-download-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
   </style>
 </head>
 <body>
@@ -225,6 +303,7 @@
         <button id="exportBttn">Export wave.txt</button>
         <button id="importBttn">Import wave.txt</button>
         <button id="resetBttn">Reset</button>
+        <button id="screenshotBttn">Generate Screenshots</button>
         <input type="file" id="fileInput" accept=".txt">
       </div>
     </header>
@@ -276,6 +355,16 @@
       <button id="cancelBttn">Cancel</button>
     </div>
   </dialog>
+
+  <div id="screenshotModal">
+    <div class="ss-modal-inner">
+      <div class="ss-modal-header">
+        <h2 class="ss-modal-title">Screenshot Preview</h2>
+        <button id="closeScreenshotModal">Close</button>
+      </div>
+      <div id="screenshotContainer"></div>
+    </div>
+  </div>
 
   <script>
     let currentC1 = "#000000";
@@ -667,6 +756,254 @@
 
     applyWaveBgToPage(palettes[0].colors[0], palettes[0].colors[1], palettes[0].colors[2]);
     renderGrid();
+
+    // ── Screenshot generation ──────────────────────────────────────────
+
+    const XMB_CATS = [
+      { name: "Music",    xmbIdx: 0, items: ["SensMe™ channels", "Playlist", "All Songs"] },
+      { name: "Photo",    xmbIdx: 1, items: ["All Photos", "Slideshow", "Photo Album"] },
+      { name: "Video",    xmbIdx: 2, items: ["Memory Stick™", "Saved Data", "My Videos"] },
+      { name: "Game",     xmbIdx: 3, items: ["Game Archive", "Saved Data Utility", "Memory Stick™"] },
+      { name: "Network",  xmbIdx: 4, items: ["Internet Browser", "PlayStation®Store", "RSS Channel"] },
+      { name: "Settings", xmbIdx: 5, items: ["System Settings", "Network Settings", "Date & Time"] }
+    ];
+
+    document.getElementById("screenshotBttn").addEventListener("click", generateScreenshots);
+    document.getElementById("closeScreenshotModal").addEventListener("click", function() {
+      document.getElementById("screenshotModal").style.display = "none";
+    });
+
+    function generateScreenshots() {
+      var PW = 480, PH = 272;
+      var COLS = 3, ROWS = 2;
+      var PER = COLS * ROWS;
+      var TOTAL = palettes.length;
+      var SHEETS = Math.ceil(TOTAL / PER);
+      var sheets = [];
+
+      for (var s = 0; s < SHEETS; s++) {
+        var sc = document.createElement("canvas");
+        sc.width = PW * COLS;
+        sc.height = PH * ROWS;
+        var sCtx = sc.getContext("2d");
+        sCtx.fillStyle = "#000";
+        sCtx.fillRect(0, 0, sc.width, sc.height);
+
+        var cat = XMB_CATS[s % XMB_CATS.length];
+
+        for (var p = 0; p < PER; p++) {
+          var palIdx = s * PER + p;
+          if (palIdx >= TOTAL) break;
+
+          var pc = document.createElement("canvas");
+          pc.width = PW; pc.height = PH;
+          drawPSPPanel(pc.getContext("2d"), PW, PH, palettes[palIdx], palIdx + 1, cat);
+
+          var col = p % COLS;
+          var row = Math.floor(p / COLS);
+          sCtx.drawImage(pc, col * PW, row * PH);
+        }
+
+        // Thin separators between panels
+        sCtx.strokeStyle = "#111";
+        sCtx.lineWidth = 2;
+        sCtx.beginPath();
+        sCtx.moveTo(PW,     0); sCtx.lineTo(PW,     PH * ROWS);
+        sCtx.moveTo(PW * 2, 0); sCtx.lineTo(PW * 2, PH * ROWS);
+        sCtx.moveTo(0, PH);     sCtx.lineTo(PW * COLS, PH);
+        sCtx.stroke();
+
+        sheets.push(sc);
+      }
+
+      showScreenshotModal(sheets);
+    }
+
+    function drawPSPPanel(ctx, w, h, pal, slotNum, cat) {
+      var c1 = normalizeHex(pal.colors[0] || "#000000");
+      var c2 = pal.colors[1] ? normalizeHex(pal.colors[1]) : null;
+      var c3 = pal.colors[2] ? normalizeHex(pal.colors[2]) : null;
+
+      // Background gradient (bottom = c1, top = c2/c3)
+      var bg = ctx.createLinearGradient(0, h, 0, 0);
+      bg.addColorStop(0, c1);
+      if (c2 && c3) { bg.addColorStop(0.5, c2); bg.addColorStop(1, c3); }
+      else if (c2)  { bg.addColorStop(1, c2); }
+      else          { bg.addColorStop(1, c1); }
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+
+      // Wave curves in lower portion of the panel
+      var waveCy = h * 0.58;
+      for (var i = 0; i < 5; i++) {
+        var amp   = 15 + i * 11;
+        var freq  = 2.1 + i * 0.32;
+        var phase = i * 0.95;
+
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        for (var x = 0; x <= w; x += 6) {
+          ctx.lineTo(x, waveCy + Math.sin((x / w) * Math.PI * freq + phase) * amp);
+        }
+        ctx.lineTo(w, h);
+        ctx.fillStyle = "rgba(255,255,255," + (0.035 + i * 0.012) + ")";
+        ctx.fill();
+
+        ctx.beginPath();
+        for (var x2 = 0; x2 <= w; x2 += 6) {
+          var wy = waveCy + Math.sin((x2 / w) * Math.PI * freq + phase) * amp;
+          x2 === 0 ? ctx.moveTo(x2, wy) : ctx.lineTo(x2, wy);
+        }
+        ctx.strokeStyle = "rgba(255,255,255," + (0.11 + i * 0.045) + ")";
+        ctx.lineWidth = 0.7 + i * 0.28;
+        ctx.stroke();
+      }
+
+      // Subtle status bar overlay
+      ctx.fillStyle = "rgba(0,0,0,0.18)";
+      ctx.fillRect(0, 0, w, 24);
+
+      // PSP-style concentric circle logo (top left)
+      ctx.save();
+      ctx.translate(16, 12);
+      ctx.strokeStyle = "rgba(255,255,255,0.75)";
+      [9, 5.5, 2].forEach(function(r) {
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+      });
+      ctx.restore();
+
+      // Time + charge text (top right)
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.font = "10px sans-serif";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText("12:34:56   100%", w - 34, 12);
+
+      // Battery icon
+      var bx = w - 30, by = 6;
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.fillStyle  = "rgba(255,255,255,0.85)";
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(bx, by, 20, 12);
+      ctx.fillRect(bx + 1, by + 1, 18, 10);
+      ctx.fillStyle = "rgba(0,0,0,0.18)";
+      ctx.fillRect(bx + 1, by + 1, 18, 10);
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.fillRect(bx + 1, by + 1, 16, 10);
+      ctx.strokeRect(bx + 20, by + 3, 3, 6);
+
+      // XMB horizontal category bar
+      var barY = h * 0.37;
+      var catLetters = ["M", "P", "V", "G", "N", "S"];
+      var catLabels  = ["Music", "Photo", "Video", "Game", "Network", "Settings"];
+      var nIcons = catLetters.length;
+      var spacing = w / (nIcons + 1);
+
+      // Faint divider line
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, barY); ctx.lineTo(w, barY); ctx.stroke();
+
+      for (var ii = 0; ii < nIcons; ii++) {
+        var ix = spacing * (ii + 1);
+        var isSel = (ii === cat.xmbIdx);
+        var radius = isSel ? 14 : 9;
+        var iy = isSel ? barY - 2 : barY + 4;
+
+        ctx.globalAlpha = isSel ? 1.0 : 0.28;
+        ctx.strokeStyle = "#ffffff";
+        ctx.fillStyle   = isSel ? "rgba(255,255,255,0.18)" : "transparent";
+        ctx.lineWidth   = isSel ? 1.8 : 1.0;
+
+        ctx.beginPath();
+        ctx.arc(ix, iy, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = (isSel ? "bold 11px" : "9px") + " sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(catLetters[ii], ix, iy);
+      }
+      ctx.globalAlpha = 1.0;
+
+      // Selected category name (below its icon)
+      var selX = spacing * (cat.xmbIdx + 1);
+      ctx.font = "11px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.fillText(cat.name, selX, barY + 20);
+
+      // Menu items
+      var menuX  = 30;
+      var menuY0 = barY + 48;
+
+      cat.items.forEach(function(item, idx) {
+        var iy2 = menuY0 + idx * 21;
+        if (idx === 0) {
+          ctx.fillStyle = "rgba(255,255,255,0.14)";
+          ctx.fillRect(menuX - 4, iy2 - 11, w - menuX - 20, 20);
+        }
+        ctx.globalAlpha = idx === 0 ? 1.0 : 0.55;
+        ctx.fillStyle = "#ffffff";
+        ctx.font = (idx === 0 ? "bold " : "") + "11px sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText("▸  " + item, menuX, iy2);
+      });
+      ctx.globalAlpha = 1.0;
+
+      // Slot number (bottom right, small)
+      ctx.font = "9px monospace";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      ctx.fillStyle = "rgba(255,255,255,0.38)";
+      ctx.fillText("#" + slotNum, w - 5, h - 4);
+    }
+
+    function showScreenshotModal(sheets) {
+      var container = document.getElementById("screenshotContainer");
+      container.innerHTML = "";
+
+      sheets.forEach(function(canvas, i) {
+        var startSlot = i * 6 + 1;
+        var endSlot   = Math.min((i + 1) * 6, palettes.length);
+
+        var wrapper = document.createElement("div");
+        wrapper.className = "ss-bundle-wrap";
+
+        var label = document.createElement("div");
+        label.className = "ss-bundle-label";
+        label.textContent = "Bundle " + (i + 1) + "  —  Slots " + startSlot + "–" + endSlot;
+
+        var img = document.createElement("img");
+        img.className = "ss-bundle-img";
+        img.src = canvas.toDataURL("image/jpeg", 0.92);
+        img.alt = "Bundle " + (i + 1);
+
+        var dlBtn = document.createElement("button");
+        dlBtn.className = "ss-download-btn";
+        dlBtn.textContent = "↓ Download Bundle " + (i + 1);
+        (function(c, idx) {
+          dlBtn.addEventListener("click", function() {
+            var a = document.createElement("a");
+            a.href = c.toDataURL("image/jpeg", 0.92);
+            a.download = "wavezbg-bundle-" + idx + ".jpg";
+            a.click();
+          });
+        })(canvas, i + 1);
+
+        wrapper.appendChild(label);
+        wrapper.appendChild(img);
+        wrapper.appendChild(dlBtn);
+        container.appendChild(wrapper);
+      });
+
+      document.getElementById("screenshotModal").style.display = "block";
+    }
   </script>
   <img src="https://librecounter.org/counter.svg" referrerPolicy="unsafe-url" width="0" />
 </body>
