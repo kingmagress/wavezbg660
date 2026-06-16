@@ -25,8 +25,14 @@ typedef struct {
     int num_colours;
 } MonthColour;
 
-MonthColour month_colours[35];
-char base_path[6] = "ms0:/";
+static MonthColour month_colours[35];
+static char base_path[6] = "ms0:/";
+
+// Worker-thread handle and stop flag. module_start records the thread id here so
+// module_stop can reap it: if the PRX is unloaded while the worker is still
+// polling, the thread would otherwise keep executing in freed module memory.
+static SceUID g_worker_thid = -1;
+static volatile int g_worker_stop = 0;
 
 static inline int hex2int(char c) {
     if (c >= '0' && c <= '9') return c - '0';
@@ -49,14 +55,16 @@ static int valid_hex6(const char *p) {
     return 1;
 }
 
-unsigned int parse_hex_colour(const char *buf) {
+static unsigned int parse_hex_colour(const char *buf) {
     int r = (hex2int(buf[1]) << 4) | hex2int(buf[2]);
     int g = (hex2int(buf[3]) << 4) | hex2int(buf[4]);
     int b = (hex2int(buf[5]) << 4) | hex2int(buf[6]);
-    return (0xFF << 24) | (b << 16) | (g << 8) | r;
+    // 0xFFu (not 0xFF): 0xFF << 24 overflows a signed int, which is UB. The
+    // alpha byte is unused by the 24-bit BMP but kept for a tidy ABGR value.
+    return (0xFFu << 24) | (b << 16) | (g << 8) | r;
 }
 
-int parse_config_buffer(const char* buf) {
+static int parse_config_buffer(const char* buf) {
     // im sure there's a better way to do this
     // honestly just got inspired by Bagieta doing
     // PAF stuff so, enjoy - or dont.
@@ -67,12 +75,15 @@ int parse_config_buffer(const char* buf) {
         
         int index = 0;
         while (*p >= '0' && *p <= '9') {
-            index = index * 10 + (*p - '0');
+            // Cap accumulation so a garbage run of digits in a corrupt file can't
+            // overflow a signed int (UB). Anything >= 100 fails the range check
+            // below anyway; we still consume the remaining digits.
+            if (index < 100) index = index * 10 + (*p - '0');
             p++;
         }
         while (*p == ' ' || *p == '=') p++;
-        
-        if (index >= 1 && index <= 35 && *p == '#' && valid_hex6(p)) {
+
+        if (index >= 1 && index <= 34 && *p == '#' && valid_hex6(p)) {
             month_colours[index - 1].c1 = parse_hex_colour(p);
             month_colours[index - 1].num_colours = 1;
             valid++;
@@ -95,7 +106,7 @@ int parse_config_buffer(const char* buf) {
     return valid;
 }
 
-void read_config() {
+static void read_config(void) {
     // defaults
     for (int i = 0; i < 35; i++) {
         month_colours[i].c1 = 0xFF0099FF; 
@@ -171,14 +182,15 @@ static inline void put_u16(unsigned char *p, unsigned short v) {
     p[1] = (unsigned char)(v >> 8);
 }
 
-void write_bmp(const char *filename, int start_month, int count) {
+// Returns 1 if the full strip was written, 0 on any open/write failure.
+static int write_bmp(const char *filename, int start_month, int count) {
     char bmp_path[64];
     strcpy(bmp_path, base_path);
     strcat(bmp_path, "wavez_cache/");
     strcat(bmp_path, filename);
-    
+
     SceUID fd = sceIoOpen(bmp_path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
-    if (fd < 0) return;
+    if (fd < 0) return 0;
 
     // The BMP header is identical for every strip (60x34, 24-bit), and the loop
     // below overwrites the entire pixel region each iteration, so build the
@@ -198,6 +210,7 @@ void write_bmp(const char *filename, int start_month, int count) {
     put_u16(&bmp_data[28], 24);    // bits per pixel
     put_u32(&bmp_data[34], 6120);  // image data size
 
+    int ok = 1;
     for (int i = 0; i < count; i++) {
         int m = start_month + i;
         if (m >= 35) m = 34;
@@ -246,29 +259,55 @@ void write_bmp(const char *filename, int start_month, int count) {
             }
         }
         
-        sceIoWrite(fd, bmp_data, 6176);
+        if (sceIoWrite(fd, bmp_data, 6176) != 6176) {
+            ok = 0;  // disk full / I/O error - stop and discard the partial file
+            break;
+        }
     }
     sceIoClose(fd);
+
+    // A short write leaves a truncated file that still *exists*, so the
+    // existence check in generate_wave_bmp would skip regenerating it forever.
+    // Remove the partial file so the next boot rebuilds it cleanly.
+    if (!ok) sceIoRemove(bmp_path);
+    return ok;
 }
 
-void generate_wave_bmp() {
+// Returns 1 when both cache strips are present on disk afterwards (cache hit or
+// freshly written), 0 if generation failed (e.g. memory stick full / read-only).
+static int generate_wave_bmp(void) {
     // pregen so we aint slow
     char cache_path[32];
     strcpy(cache_path, base_path);
     strcat(cache_path, "wavez_cache");
     sceIoMkdir(cache_path, 0777);
 
+    // Cache hit only when BOTH strips exist. Checking w1.bmp alone meant a power
+    // loss between the two write_bmp calls below could leave w2.bmp permanently
+    // missing - the old code would then skip regeneration forever. If either is
+    // absent we rebuild both (cheap, and keeps the pair consistent).
     char check_path[64];
+    int have_w1 = 0, have_w2 = 0;
+
     strcpy(check_path, cache_path);
     strcat(check_path, "/w1.bmp");
     SceUID fd = sceIoOpen(check_path, PSP_O_RDONLY, 0777);
-    if (fd >= 0) {
-        sceIoClose(fd);
-        return;
-    }
+    if (fd >= 0) { sceIoClose(fd); have_w1 = 1; }
 
-    write_bmp("w1.bmp", 0, 12);
-    write_bmp("w2.bmp", 12, 22);
+    strcpy(check_path, cache_path);
+    strcat(check_path, "/w2.bmp");
+    fd = sceIoOpen(check_path, PSP_O_RDONLY, 0777);
+    if (fd >= 0) { sceIoClose(fd); have_w2 = 1; }
+
+    if (have_w1 && have_w2) return 1;
+
+    // Attempt both even if one already existed, so the pair always matches the
+    // current config. Report ready only if both landed - main_thread skips
+    // patching when this is 0, leaving the stock flash0 wave rather than
+    // pointing the XMB at a cache file that isn't there.
+    int ok1 = write_bmp("w1.bmp", 0, 12);
+    int ok2 = write_bmp("w2.bmp", 12, 22);
+    return ok1 && ok2;
 }
 
 // Scan one mapped memory range [addr, end_addr) for the stock flash0 wave
@@ -306,7 +345,7 @@ static int patch_range(char *addr, char *end_addr, const char *replace1, const c
     return patched;
 }
 
-int patch_wave_strings() {
+static int patch_wave_strings(void) {
     int patched = 0;
 
     char replace1[36];
@@ -377,26 +416,48 @@ int patch_wave_strings() {
     return patched;
 }
 
-int main_thread(SceSize args, void *argp) {
+static int main_thread(SceSize args, void *argp) {
     (void)args;
     (void)argp;
 
     read_config();
-    generate_wave_bmp();
 
-    // The target VSH modules aren't loaded yet when module_start runs, so poll
-    // until their resource strings are in memory and we can patch them. Bounded
-    // at ~60s (600 * 100ms) so that if the patch never lands (unexpected module
-    // names, CXMB, etc.) we give up and free this thread instead of spinning
-    // forever. The success case breaks out within the first second or two, so
-    // the timeout never affects working setups.
-    for (int attempts = 0; attempts < 600; attempts++) {
-        if (patch_wave_strings()) {
-            break;
+    // Only patch if the cache strips are actually on disk. If generation failed
+    // (full / read-only memory stick) we leave the stock flash0 wave paths alone
+    // - a default wave that self-heals next boot beats pointing the XMB at a
+    // missing file.
+    if (generate_wave_bmp()) {
+        // The target VSH modules aren't loaded yet when module_start runs, so poll
+        // until their resource strings are in memory and we can patch them. Bounded
+        // at ~60s (600 * 100ms) so that if the patch never lands (unexpected module
+        // names, CXMB, etc.) we give up and free this thread instead of spinning
+        // forever.
+        //
+        // Don't stop on the first success: system_plugin_bg / sysconf_plugin / vsh*
+        // load at slightly different times, so a module holding the wave strings can
+        // appear AFTER the first patch. patch_wave_strings is idempotent (a patched
+        // string no longer starts with "flash"), so we keep scanning and only exit
+        // once GRACE_QUIET consecutive polls (~1s) pass with nothing left to patch -
+        // that grace window catches late-loading modules the old early-break missed.
+        // g_worker_stop lets module_stop break us out promptly on PRX unload.
+        const int GRACE_QUIET = 10;
+        int patched_once = 0;
+        int quiet = 0;
+        for (int attempts = 0; attempts < 600 && !g_worker_stop; attempts++) {
+            if (patch_wave_strings()) {
+                patched_once = 1;
+                quiet = 0;
+            } else if (patched_once) {
+                if (++quiet >= GRACE_QUIET) break;
+            }
+            sceKernelDelayThread(100000);
         }
-        sceKernelDelayThread(100000);
     }
 
+    // Clear before self-deleting so a later module_stop won't wait on this (now
+    // freed, possibly recycled) thread id. Past this point no module code runs -
+    // ExitDeleteThread never returns - so an unload racing here is harmless.
+    g_worker_thid = -1;
     sceKernelExitDeleteThread(0);
     return 0;
 }
@@ -407,16 +468,39 @@ int module_start(SceSize args, void *argp) {
     if (ver != 0x06060110 && ver != 0x06060010) {
         return 1;
     }
+    // Reset in case module_start is ever re-entered on the same loaded instance
+    // (a stale 1 from a prior module_stop would make the new worker exit at once).
+    g_worker_stop = 0;
+
     // 0x8000 (32KB) stack: peak use is ~6.5KB (the 6176-byte BMP buffer in
     // write_bmp plus call frames), leaving a generous safety margin. The thread
     // deletes itself once patching succeeds, so this is reclaimed at boot.
     SceUID thid = sceKernelCreateThread("wavezbg_thread", main_thread, 0x18, 0x8000, 0, NULL);
     if (thid >= 0) {
-        sceKernelStartThread(thid, args, argp);
+        g_worker_thid = thid;
+        if (sceKernelStartThread(thid, args, argp) < 0) {
+            // Created but never started: it can't self-delete, so reap it here
+            // instead of leaking the thread.
+            sceKernelDeleteThread(thid);
+            g_worker_thid = -1;
+        }
     }
     return 0;
 }
 
 int module_stop(void) {
+    // If the PRX is unloaded while the worker is still polling, the thread would
+    // keep running in freed module memory. Signal it to stop and wait for it to
+    // exit before returning. The poll loop checks g_worker_stop every 100ms, so
+    // this normally returns almost immediately; the timeout caps how long an
+    // unload can block if the worker is mid-I/O (e.g. first-boot BMP generation,
+    // which isn't interruptible). If the worker already self-deleted, the stale
+    // id makes sceKernelWaitThreadEnd return an error, which is fine.
+    g_worker_stop = 1;
+    if (g_worker_thid >= 0) {
+        SceUInt timeout = 5 * 1000 * 1000; // 5s, in microseconds
+        sceKernelWaitThreadEnd(g_worker_thid, &timeout);
+        g_worker_thid = -1;
+    }
     return 0;
 }
