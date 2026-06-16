@@ -12,7 +12,6 @@ Download the latest release from
 [here](https://github.com/kingmagress/wavezbg/releases/latest).
 
 Note1: Delete the wavez_cache/ folder on root of your memory stick everytime you have a new wave.txt
-Note2: Added the wave_insane.txt which has presets of really vibrant colors as sample reference.
 
 [Tested on 6.60 PRO-C PSP 1000]
 
@@ -30,7 +29,7 @@ Kachow!
 The plugin creates a wave.txt in your SEPLUGINS folder, edit that with whatever
 HTML colour codes you want.
 
-Or use the [web editor](https://koutsie.github.io/wavezbg/)
+Or use the [web editor](https://koutsie.github.io/wavezbg/) or [web editor 2](https://kingmagress.github.io/wavezbg660/)
 
 If you fuck up, a wavezbg_ERROR.txt will be generated.
 
@@ -42,8 +41,6 @@ It does NOT work with CXMB.
 ~~I only test and support ARK, if you're on LE/PRO(-C) etc you're outta luck.~~
 
 Tested working on 6.60 PRO-C, on PSP 1000.
-Some of the month colour slot # may not correspond to the PSP color selection slot #.
-Your best bet is to have a wide variety of presets in wave.txt or make all of the slots in wave.txt the same color scheme.
 
 Also, no warranties, guarantees etc given. You're on your own.
 
@@ -60,7 +57,7 @@ TotalKommando ([YT](https://www.youtube.com/@TotalKommando)) for helping with 1K
 
 And of course _YOU_ for using the plugin!
 
-Koutsie the author
+[Koutsie](https://github.com/koutsie)the original author of this plugin
 
 ## Support, comments etc?
 
