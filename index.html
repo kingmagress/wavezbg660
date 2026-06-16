@@ -303,6 +303,8 @@
         <button id="exportBttn">Export wave.txt</button>
         <button id="importBttn">Import wave.txt</button>
         <button id="resetBttn">Reset</button>
+        <button id="randomizeBttn">Randomize</button>
+        <button id="fixBrightnessBttn">Fix Brightness</button>
         <button id="screenshotBttn">Generate Screenshots</button>
         <input type="file" id="fileInput" accept=".txt">
       </div>
@@ -689,6 +691,50 @@
     resetBttn.addEventListener("click", function() {
       if (confirm("Reset all colours to defaults?")) {
         palettes = JSON.parse(JSON.stringify(defaultPalettes));
+        localStorage.setItem("pspPalettes", JSON.stringify(palettes));
+        applyWaveBgToPage(palettes[0].colors[0], palettes[0].colors[1], palettes[0].colors[2]);
+        renderGrid();
+      }
+    });
+
+    document.getElementById("randomizeBttn").addEventListener("click", function() {
+      if (!confirm("Randomize all 34 colour slots with random colours?")) return;
+      palettes = palettes.map(function(pal) {
+        var n = Math.floor(Math.random() * 3) + 1;
+        var colors = [];
+        for (var i = 0; i < n; i++) {
+          colors.push("#" + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, "0").toUpperCase());
+        }
+        return { index: pal.index, colors: colors };
+      });
+      localStorage.setItem("pspPalettes", JSON.stringify(palettes));
+      applyWaveBgToPage(palettes[0].colors[0], palettes[0].colors[1], palettes[0].colors[2]);
+      renderGrid();
+    });
+
+    document.getElementById("fixBrightnessBttn").addEventListener("click", function() {
+      var THRESHOLD = 175;
+      var TARGET = 174;
+      var changed = false;
+      palettes = palettes.map(function(pal) {
+        var newColors = pal.colors.map(function(hex) {
+          var rgb = getRgb(normalizeHex(hex));
+          var brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
+          if (brightness > THRESHOLD) {
+            changed = true;
+            var scale = TARGET / brightness;
+            var r = Math.min(255, Math.floor(rgb.r * scale));
+            var g = Math.min(255, Math.floor(rgb.g * scale));
+            var b = Math.min(255, Math.floor(rgb.b * scale));
+            return "#" + r.toString(16).padStart(2, "0").toUpperCase() +
+                         g.toString(16).padStart(2, "0").toUpperCase() +
+                         b.toString(16).padStart(2, "0").toUpperCase();
+          }
+          return hex;
+        });
+        return { index: pal.index, colors: newColors };
+      });
+      if (changed) {
         localStorage.setItem("pspPalettes", JSON.stringify(palettes));
         applyWaveBgToPage(palettes[0].colors[0], palettes[0].colors[1], palettes[0].colors[2]);
         renderGrid();
