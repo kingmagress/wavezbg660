@@ -15,6 +15,7 @@ Requires the PSP toolchain (`psp-cmake`, `pspdev`). Build on the PSP/WSL side, n
 ```
 
 This script:
+
 1. Converts [wave.txt](wave.txt) into [src/default_wave.h](src/default_wave.h) (a C header with the default colour config embedded as a string literal)
 2. Runs `psp-cmake -DBUILD_PRX=1 -DENC_PRX=1 ..` in `build/`
 3. Runs `make`
@@ -41,14 +42,13 @@ The 35-element `month_colours[]` array is 1-indexed in the config but 0-indexed 
 
 `generate_wave_bmp` splits the 34 slots across the PSP's two wave resource files:
 
-| Generated file | Replaces (flash0) | `wave.txt` slots |
-|---|---|---|
-| `w1.bmp` | `01-12.bmp` **and** `01-12_03g.bmp` | **1–12** |
-| `w2.bmp` | `13-27.bmp` | **13–34** |
+| Generated file | Replaces (flash0)                   | `wave.txt` slots |
+| -------------- | ----------------------------------- | ---------------- |
+| `w1.bmp`       | `01-12.bmp` **and** `01-12_03g.bmp` | **1–12**         |
+| `w2.bmp`       | `13-27.bmp`                         | **13–34**        |
 
 - The colour set the XMB actually cycles through for the wave is the **12 colours in `w1.bmp` (slots 1–12)**. So the "2nd-to-last selectable colour" is slot 11, not slot 33 — this is expected, not a bug.
 - `01-12_03g.bmp` is the slim/03g colour profile (also used on a PSP-1000 when "use slim colours" is enabled). Both it and `01-12.bmp` are patched to `w1.bmp`, so slots 1–12 apply either way.
-- **Unconfirmed:** `w2.bmp` is written with 22 strips (slots 13–34), but the original `13-27.bmp` name implies the firmware may only read ~15. If so, slots 28–34 may never display. Not verified on hardware.
 
 ### Cache invalidation gotcha
 
@@ -70,7 +70,7 @@ Single-file vanilla HTML/CSS/JS app. Persists the 34-palette state in `localStor
 
 ### Default wave config ([wave.txt](wave.txt))
 
-Source of truth for the default colours baked into the PRX. Editing this file and re-running `./build.sh` updates the embedded default. Note that editing `wave.txt` only changes the *embedded fallback*; an end user's runtime colours come from the `wave.txt` on their memory stick.
+Source of truth for the default colours baked into the PRX. Editing this file and re-running `./build.sh` updates the embedded default. Note that editing `wave.txt` only changes the _embedded fallback_; an end user's runtime colours come from the `wave.txt` on their memory stick.
 
 ## 6.60 support
 
@@ -90,7 +90,7 @@ if (ver != 0x06060110 && ver != 0x06060010) {
 `sceKernelDevkitVersion()` returns `0x0MMmmrr10`:
 
 | Firmware | Devkit version |
-|----------|----------------|
+| -------- | -------------- |
 | 6.60     | `0x06060010`   |
 | 6.61     | `0x06060110`   |
 
@@ -99,7 +99,46 @@ if (ver != 0x06060110 && ver != 0x06060010) {
 - Both ARK and PRO(-C) load VSH plugins via the same `seplugins/` mechanism, and `patch_wave_strings` scans live VSH module memory rather than using hardcoded addresses — so it is largely CFW-agnostic and ported without address changes.
 - Confirmed loading and patching on 6.60 PRO-C Fix 3. The upstream README still disclaims PRO/LE support (it is written for ARK only) — treat that disclaimer as stale for this fork.
 
-### Still unverified on 6.60
+# Claude Code Rules (PSP Project)
 
-- Whether slots 28–34 (the tail of `w2.bmp`) ever display — see the slot-mapping caveat above.
-- If patching ever fails on a future firmware/CFW, the likely causes are differing VSH module names (`system_plugin_bg`, `sysconf_plugin`, `vsh`) or differing stock resource path strings; the poll now gives up after ~60 s rather than spinning forever.
+## Core Workflow (mandatory)
+
+Before writing code:
+
+1. Search external/pspsdk/src and docs/pspsdk-api for relevant APIs
+2. Identify exact headers and functions
+3. Produce a plan with risks and alternatives
+4. Wait for approval before modifying files
+
+## Implementation Rules
+
+- Never guess PSP SDK function signatures
+- If unsure, search headers or samples first
+
+## PSP Constraints
+
+- Target firmware: 6.60, 6.61
+- Avoid flash modifications
+- Keep PRX lightweight and stable
+- Avoid blocking VSH/main threads
+- Validate all sce\* APIs in PSPSDK headers
+
+## Verification
+
+After changes:
+
+- Fix errors before finishing
+- Summarize all modifications
+
+## General rule
+
+Never proceed directly to implementation.
+
+Always:
+
+- retrieve
+- reason
+- propose
+- wait
+- implement
+- verify
